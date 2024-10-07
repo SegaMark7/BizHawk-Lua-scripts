@@ -4,7 +4,13 @@ local timerNextScreen = 0xBCAB
 
 -- #endregion
 
-local prevCRAM = nil
+-- #region ROM Adresses
+
+local headerEnd = 0x220
+
+-- #endregion
+
+local prevCRAM = {}
 
 -- функция которая переключает между памятными доменами
 function UseAndCheckMemoryDomain(memorydomain)
@@ -30,37 +36,56 @@ end
 
 function init()
     client.reboot_core()
+    
+    if client.ispaused() then
+        client.unpause()
+    end
 end
 
 init()
 
-local offset = 0xEAEC2
+local offset = 0xE60F2
+-- local offset = 0xaec9b
+memory.write_s16_be(offset, 0x0000, "MD CART")
 
 while true do
     -- console.log("memory.getcurrentmemorydomain() = " .. memory.getcurrentmemorydomain());
-    -- if memory.getcurrentmemorydomain() == "68K RAM" then
-        
-        if emu.framecount() % 50 == 0 then            
-            -- UseAndCheckMemoryDomain("CRAM");
-            local curCRAM = memory.read_bytes_as_array(0, memory.getmemorydomainsize("CRAM"), "CRAM")
-            -- console.writeline(curCRAM)
-            if prevCRAM == nil then
-                prevCRAM = curCRAM
+    -- console.writeline(curCRAM)
+    
+    if memory.read_s16_be(offset) == 0x0000 then
+        offset = offset - 2            
+    end
+
+    if offset == headerEnd then
+        console.log("Reach header")
+        break
+    end
+
+    if emu.framecount() % 30 == 0 and emu.framecount() ~= 0 then            
+        local curCRAM = memory.read_bytes_as_array(0, memory.getmemorydomainsize("CRAM"), "CRAM")
+
+        if #prevCRAM == 0  then
+            for i = 1, #curCRAM do
+                prevCRAM[i] = curCRAM[i]
             end
-            if CompareArrays(prevCRAM, curCRAM) then
-                prevCRAM = curCRAM
-            else
-                console.log("offset =" .. offset)
-                console.log("DONE")
-                client.pause()
-                -- prevCRAM = curCRAM
-            end
-            memory.write_s16_be(offset, 0x0000, "MD CART")
-            offset = offset - 2
-            client.reboot_core()
         end
-    -- else
-    --     UseAndCheckMemoryDomain("68K RAM");
-    -- end
+
+        if CompareArrays(prevCRAM, curCRAM) then
+            prevCRAM = curCRAM
+            console.log("offset =" .. string.format("%x", offset))
+        else
+            console.log("prevCRAM =")
+            console.writeline(prevCRAM)
+            console.log("curCRAM =")
+            console.writeline(curCRAM)
+            console.log("offset =" .. string.format("%x", offset))
+            console.log("DONE")
+            break
+            -- client.pause()
+        end
+        client.reboot_core()
+        memory.write_s16_be(offset, 0x0000, "MD CART")
+        offset = offset - 2
+    end
     emu.frameadvance();
 end

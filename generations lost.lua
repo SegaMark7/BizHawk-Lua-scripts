@@ -78,7 +78,8 @@ local offset = usefullMemoryEnd
 -- local offset = 0xaec9b
 -- memory.write_s32_be(offset, 0x00000000, "MD CART")
 
-while true do
+while sizeToWrite >= 1 do
+    -- console.log("Scanning with sizeToWrite = " .. sizeToWrite)
     -- console.log("memory.getcurrentmemorydomain() = " .. memory.getcurrentmemorydomain());
     
     -- if memory.read_s32_be(offset) == 0x00000000 then
@@ -98,17 +99,16 @@ while true do
         end
 
         if CompareArrays(prevCRAM, curCRAM) then
-            prevCRAM = CopyArray(curCRAM)
+            -- prevCRAM = CopyArray(curCRAM)
             console.log("offset = " .. string.format("%x", offset))
         else
+            console.log("UsefullOffsetDec = " .. offset)
+            console.log("UsefullOffsetHex = $" .. string.format("%x", offset) .. "-$" .. string.format("%x", offset+sizeToWrite))
+            console.log("length = $" .. string.format("%x", sizeToWrite) .. "(" .. sizeToWrite .. ")")
             console.log("prevCRAM =")
             console.writeline(prevCRAM)
             console.log("curCRAM =")
             console.writeline(curCRAM)
-            console.log("offsetDec = " .. offset)
-            console.log("offsetHex = $" .. string.format("%x", offset) .. "-$" .. string.format("%x", offset+sizeToWrite))
-            console.log("length = $" .. string.format("%x", sizeToWrite) .. "(" .. sizeToWrite .. ")")
-            console.log("DONE")
             -- client.pause()
             prevCRAM = {}
             offset = offset + sizeToWrite
@@ -123,3 +123,5 @@ while true do
     end
     emu.frameadvance();
 end
+
+console.log("DONE");

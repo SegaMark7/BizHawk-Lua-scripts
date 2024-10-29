@@ -11,7 +11,7 @@ local usefullMemoryEnd = 0xEAEC3
 
 -- #endregion
 
-local prevCRAM = {}
+local OrigCRAM = {}
 
 -- функция которая переключает между памятными доменами
 function UseAndCheckMemoryDomain(memorydomain)
@@ -53,6 +53,15 @@ local function CreateZeroArray(size)
 	return zeroArray
 end
 
+local function isAllZeros(array)
+    for _, value in ipairs(array) do
+        if value ~= 0 then
+            return false
+        end
+    end
+    return true
+end
+
 function init()
     client.reboot_core()
     
@@ -63,6 +72,9 @@ end
 
 init()
 
+local index = 0
+local UsefullOffset = {}
+
 -- Вычисляем размер диапазона и 10% от него
 local range = usefullMemoryEnd - headerEnd
 local sizeToWrite = math.floor(range * 0.1)  -- Размер массива, который будет записан (10% от диапазона)
@@ -70,56 +82,91 @@ local sizeToWrite = math.floor(range * 0.1)  -- Размер массива, к�
 -- Создаём массив из 0x00 размером 10% от диапазона
 -- local zeroArray = CreateZeroArray(sizeToWrite)
 
-
-local offset = usefullMemoryEnd
+local startOffset = headerEnd
+local curOffset = headerEnd
+local endOffset = usefullMemoryEnd
+-- local offset = usefullMemoryEnd
 -- local offset = 0xb7cf4
 -- local offset = 0xd1760
 -- local offset = 0xE60F2
 -- local offset = 0xaec9b
 -- memory.write_s32_be(offset, 0x00000000, "MD CART")
+memory.write_bytes_as_array(curOffset, CreateZeroArray(sizeToWrite), "MD CART")
 
-while sizeToWrite >= 1 do
+while true do
     -- console.log("Scanning with sizeToWrite = " .. sizeToWrite)
-    -- console.log("memory.getcurrentmemorydomain() = " .. memory.getcurrentmemorydomain());
-    
-    -- if memory.read_s32_be(offset) == 0x00000000 then
-    --     offset = offset - sizeToWrite            
-    -- end
+    -- console.log("memory.getcurrentmemorydomain() = " .. memory.getcurrentmemorydomain());  
 
-    if offset <= headerEnd then
-        console.log("usefullMemory header")
-        break
-    end
-
-    if emu.framecount() % 30 == 0 and emu.framecount() ~= 0 then            
+    if emu.framecount() % 30 == 0 and emu.framecount() ~= 0 then 
+        
+        
+        
         local curCRAM = memory.read_bytes_as_array(0, memory.getmemorydomainsize("CRAM"), "CRAM")
-
-        if #prevCRAM == 0  then
-            prevCRAM = CopyArray(curCRAM)    
+        
+        
+        -- if isAllZeros(curCRAM) then
+        --     console.log("MudaOffset = $" .. string.format("%x", curOffset) .. "-$" .. string.format("%x", curOffset+sizeToWrite))                
+        --     goto continue
+        -- end
+        
+        
+        if #OrigCRAM == 0 and not isAllZeros(curCRAM) then
+            OrigCRAM = CopyArray(curCRAM)  
+            -- console.log("OrigCRAM = CopyArray(curCRAM)")
         end
 
-        if CompareArrays(prevCRAM, curCRAM) then
-            -- prevCRAM = CopyArray(curCRAM)
-            console.log("offset = " .. string.format("%x", offset))
+        if CompareArrays(OrigCRAM, curCRAM) then
+            
+            -- OrigCRAM = CopyArray(curCRAM)
+            
+            console.log("MudaOffset = $" .. string.format("%x", curOffset) .. "-$" .. string.format("%x", curOffset+sizeToWrite))                
+            -- console.log("curCRAM =")
+            -- console.writeline(curCRAM)
+            -- console.log("prevCRAM =")
+            -- console.writeline(OrigCRAM)
         else
-            console.log("UsefullOffsetDec = " .. offset)
-            console.log("UsefullOffsetHex = $" .. string.format("%x", offset) .. "-$" .. string.format("%x", offset+sizeToWrite))
+            TempOffset={}
+            TempOffset.startAdr = curOffset
+            TempOffset.endAdr = curOffset+sizeToWrite
+            table.insert(UsefullOffset, TempOffset)
+
+            console.log("UsefullOffsetDec = " .. curOffset .. "-" .. curOffset+sizeToWrite)
+            console.log("UsefullOffsetHex = $" .. string.format("%x", curOffset) .. "-$" .. string.format("%x", curOffset+sizeToWrite))
             console.log("length = $" .. string.format("%x", sizeToWrite) .. "(" .. sizeToWrite .. ")")
             console.log("prevCRAM =")
-            console.writeline(prevCRAM)
+            console.writeline(OrigCRAM)
             console.log("curCRAM =")
             console.writeline(curCRAM)
-            -- client.pause()
-            prevCRAM = {}
-            offset = offset + sizeToWrite
-            if sizeToWrite <= 1 then
-                break                
-            end
-            sizeToWrite = math.floor(sizeToWrite/2)
+ 
         end
+
+        ::continue::
+        if curOffset >= endOffset then
+            console.log("index = " .. index)
+            console.log("sizeToWrite= " .. sizeToWrite)
+            console.log("#UsefullOffset = " .. #UsefullOffset)
+            index = index + 1
+            if index > #UsefullOffset then
+                console.log("#UsefullOffset > index")
+                index = 0            
+                UsefullOffset = {}
+                sizeToWrite = math.floor(sizeToWrite/2)
+                
+                if sizeToWrite <= 1 then
+                    break
+                end
+            else
+                curOffset = UsefullOffset[index].startAdr
+                endOffset = UsefullOffset[index].endAdr
+            end
+    
+        else 
+            curOffset = curOffset + sizeToWrite
+        end
+
         client.reboot_core()
-        memory.write_bytes_as_array(offset, CreateZeroArray(sizeToWrite), "MD CART")
-        offset = offset - sizeToWrite
+        memory.write_bytes_as_array(curOffset, CreateZeroArray(sizeToWrite), "MD CART")
+        
     end
     emu.frameadvance();
 end
